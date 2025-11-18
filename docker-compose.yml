@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: hotel_management_postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: hotel_management
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - hotel_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: hotel_management_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - hotel_network
+
+  ml-service:
+    build:
+      context: ./python-ml
+      dockerfile: Dockerfile
+    container_name: hotel_management_ml_service
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./python-ml:/app
+    networks:
+      - hotel_network
+    depends_on:
+      - postgres
+      - redis
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: hotel_management_backend
+    ports:
+      - "3001:3001"
+    environment:
+      DATABASE_URL: "postgresql://admin:password@postgres:5432/hotel_management?schema=public"
+      REDIS_URL: "redis://redis:6379"
+      JWT_SECRET: "your_jwt_secret"
+      ML_API_URL: "http://ml-service:8000/api/ml"
+    volumes:
+      - ./backend:/usr/src/app
+      - /usr/src/app/node_modules
+    networks:
+      - hotel_network
+    depends_on:
+      - postgres
+      - redis
+      - ml-service
+    command: >
+      sh -c "npx prisma migrate deploy &&
+             npx prisma db seed &&
+             npm run dev"
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  hotel_network:
+    driver: bridge
