@@ -4,7 +4,15 @@ import prisma from '../../config/prisma';
 import { createClient } from 'redis';
 
 const redisClient = createClient({ url: process.env.REDIS_URL });
-redisClient.connect();
+
+// Connect to Redis but handle errors gracefully
+redisClient.connect().catch((err) => {
+  console.warn('Redis connection failed (pricing will work without caching):', err.message);
+});
+
+redisClient.on('error', (err) => {
+  console.warn('Redis error:', err.message);
+});
 
 export class PricingService {
   async calculateOptimalPrices(hotelId: string, dateRange: { start: Date; end: Date }) {
